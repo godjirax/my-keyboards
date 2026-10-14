@@ -6,3 +6,7 @@
 #define RGB_BRIGHTNESS 8
 
 #define MASTER_LEFT
+#define SPLIT_LAYER_STATE_ENABLE
+#define SPLIT_TRANSACTION_IDS_USER RPC_ID_LASER_EFFECT
+
+#define OLED_FONT_H "drivers/oled/glcdfont.c"

@@ -106,6 +106,8 @@ const uint8_t N_LAYERS = ARRAY_SIZE(keymaps);
 
 static bool star_pressed;
 static bool star_used;
+static bool s_numbers_held;
+static bool s_numbers_hold_used;
 
 #define SCALE(value) ((value * RGB_BRIGHTNESS) / 255)
 
@@ -150,6 +152,23 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     if (star_pressed && keycode != STAR_CODE && record->event.pressed) {
         star_used = true;
+    }
+
+    if (keycode == S_NUMBERS_NEW) {
+        if (record->event.pressed && record->tap.count == 0) {
+            s_numbers_held      = true;
+            s_numbers_hold_used = false;
+        } else if (!record->event.pressed) {
+            s_numbers_held = false;
+        }
+    } else if (s_numbers_held && record->event.pressed) {
+        // A key missing from _NUMBERS_NEW types "s" before itself.
+        // A key defined on that layer consumes the hold, so no "s" is added.
+        uint16_t numbers_keycode = keymap_key_to_keycode(_NUMBERS_NEW, record->event.key);
+        if (!s_numbers_hold_used && numbers_keycode == KC_TRNS) {
+            tap_code16(FR_S);
+        }
+        s_numbers_hold_used = true;
     }
 
     switch (keycode) {
