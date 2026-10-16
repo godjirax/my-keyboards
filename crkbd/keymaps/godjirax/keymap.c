@@ -65,7 +65,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 
     [_CODE] = LAYOUT_split_3x6_3(
-        FR_TILD, FR_AMPR, FR_LABK, FR_LBRC, FR_RBRC, FR_SLSH,  XXXXXXX, FR_ASTR, FR_QUOT, XXXXXXX, FR_UNDS, KC_DEL,
+        FR_TILD, FR_AMPR, FR_LABK, FR_LBRC, FR_RBRC, FR_DLR,  XXXXXXX, FR_ASTR, FR_QUOT, XXXXXXX, FR_UNDS, KC_DEL,
         KC_ESC,  FR_GRV,  FR_EQL,  FR_LPRN, FR_RPRN, FR_EXLM,  FR_COLN, FR_DOT,  FR_SLSH, XXXXXXX, FR_AT,   FR_DLR,
         _______, FR_PIPE, FR_RABK, FR_LCBR, FR_RCBR, FR_PERC,  FR_PLUS, FR_MINS, FR_HASH, TH_DOT,  FR_BSLS, _______,
                                     QK_MAKE, _______, _______,  _______, _______, _______
@@ -107,6 +107,11 @@ static bool star_pressed;
 static bool star_used;
 static bool s_hold_used_layer_key;
 static bool s_hold_settle_as_tap;
+static bool gui_held;
+static bool spac_num_held;
+static bool ctrl_alt_chord;
+static bool spac_num_swallowed;
+static bool spac_num_suppress;
 static uint16_t local_tap_count;
 static matrix_row_t previous_matrix_rows[MATRIX_ROWS];
 
@@ -433,7 +438,82 @@ static void handle_s_number_hold(uint16_t keycode, keyrecord_t *record) {
     s_hold_settle_as_tap = true;
 }
 
+// Holding Cmd + SPAC_NUM reports left Ctrl + left Alt for as long as both are held.
+// Cmd is removed from the report, and the space layer-tap is not sent.
+static void ctrl_alt_chord_on(void) {
+    if (ctrl_alt_chord) {
+        return;
+    }
+    ctrl_alt_chord = true;
+    unregister_mods(MOD_BIT(KC_LGUI));
+    register_mods(MOD_BIT(KC_LCTL) | MOD_BIT(KC_LALT));
+    layer_off(_NUMBERS);
+}
+
+static void ctrl_alt_chord_off(void) {
+    if (!ctrl_alt_chord) {
+        return;
+    }
+    ctrl_alt_chord = false;
+    unregister_mods(MOD_BIT(KC_LCTL) | MOD_BIT(KC_LALT));
+    if (gui_held) {
+        register_mods(MOD_BIT(KC_LGUI));
+    }
+}
+
+bool pre_process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == KC_LGUI) {
+        if (record->event.pressed) {
+            gui_held = true;
+            if (spac_num_held) {
+                ctrl_alt_chord_on();
+                if (!spac_num_swallowed) {
+                    spac_num_suppress = true;
+                }
+                return false;
+            }
+        } else {
+            gui_held = false;
+            if (ctrl_alt_chord) {
+                ctrl_alt_chord_off();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (keycode == SPAC_NUM) {
+        if (record->event.pressed) {
+            spac_num_held = true;
+            if (gui_held) {
+                ctrl_alt_chord_on();
+                spac_num_swallowed = true;
+                return false;
+            }
+        } else {
+            spac_num_held = false;
+            if (spac_num_swallowed) {
+                spac_num_swallowed = false;
+                ctrl_alt_chord_off();
+                return false;
+            }
+            if (ctrl_alt_chord) {
+                ctrl_alt_chord_off();
+            }
+        }
+    }
+
+    return true;
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == SPAC_NUM && spac_num_suppress) {
+        if (!record->event.pressed) {
+            spac_num_suppress = false;
+        }
+        return false;
+    }
+
     handle_s_number_hold(keycode, record);
 
     send_event_to_hid(keycode, record->event);
